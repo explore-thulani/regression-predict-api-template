@@ -59,8 +59,61 @@ def _preprocess_data(data):
     # ---------------------------------------------------------------
 
     # ----------- Replace this code with your own preprocessing steps --------
-    predict_vector = feature_vector_df[['Pickup Lat','Pickup Long',
-                                        'Destination Lat','Destination Long']]
+
+    feature_vector_df.columns = [name.lower() for name in feature_vector_df.columns]
+    #feature_vector_df.drop(["arrival at destination - day of month","arrival at destination - time"],axis=1,inplace=True)
+
+    def remove_colon(number):
+        if number[-1]==':' or number[-1]=='A' or number[-1]=='P':
+            number = number[:-1]
+        return number
+
+    def convert_dates_to_seconds(df, date,time):
+        """takes in pandas dataframe and converts time stamps
+        into seconds """
+        date_in_seconds = []
+        days_in_seconds = (df[date]-1)*3600*24
+        
+        for i in range(len(df)):
+            hours = int(remove_colon(df[time][i][:2]))
+            mins =  int(remove_colon(df[time][i][3:5]))
+            seconds =  int(remove_colon(df[time][i][6:9]))
+            
+            if df[time][i][-2:] =='PM':
+                date_in_seconds.append((hours+12)*3600+mins*60+seconds)
+            else:
+                date_in_seconds.append((hours)*3600+mins*60+seconds)
+        return np.array(date_in_seconds)+np.array(days_in_seconds)
+
+    def correct_data_format_train(df):
+
+        df = df.copy()
+        """takes in data frame and transforms it into preferred data frame """
+        
+        #convert dates
+        
+        convert_columns = {"placement - day of month":"placement - time","confirmation - day of month":"confirmation - time",
+                        "pickup - day of month":"pickup - time","arrival at pickup - day of month":"arrival at pickup - time"}
+        
+        drop_columns = ["precipitation in millimeters",
+                        "arrival at destination - day of month",
+                "arrival at destination - time","arrival at destination - weekday (mo = 1)","order no","user id","vehicle type","order no","rider id"]
+
+        for column_name in df.columns:
+            if column_name in convert_columns:
+                df[convert_columns[column_name]] = convert_dates_to_seconds(df,date=column_name ,time =convert_columns[column_name])
+            elif column_name in drop_columns:
+                df.drop(column_name,axis=1,inplace=True)
+                
+        #Fillingna and dummy variable
+        df['temperature'].fillna(df['temperature'].mean(),inplace=True)
+        df["personal or business"] = pd.get_dummies(df, prefix =["personal or business"],columns = ["personal or business"],drop_first=True)
+        df['time from arrival to pickup'] = 0
+        return df
+
+    feature_vector_df = correct_data_format_train(feature_vector_df)
+
+    predict_vector = feature_vector_df
     # ------------------------------------------------------------------------
 
     return predict_vector
